@@ -167,6 +167,10 @@
             <p>Link to the workflow yml on GitHub: <a href="https://github.com/verttistenberg/cloudservicesweek6/blob/main/.github/workflows/deploy.yml">deploy.yml</a></p>
             <p>Workflow run on GitHub Actions:</p>
             <img src="https://a3s.fi/swift/v1/cloudservicesweek6/deploy1.png">
+            <p>Commit to GitHub triggers the workflow:</p>
+            <img src="https://a3s.fi/swift/v1/cloudservicesweek6/push1.png">
+            <img src="https://a3s.fi/swift/v1/cloudservicesweek6/push2.png">
+            <p>Probe config: The liveness probe checks the application's health every 10 seconds, while the readiness probe checks if the application is ready to serve traffic every 5 seconds. The liveness probe doesn’t check the database, so that a database outage doesn't cause a restart and the readiness probe checks the database and marks the pod as not ready if the database is unavailable. The startup probe checks the application's readiness on startup. Below is an example of the probes working:</p>
 
         </details>
 

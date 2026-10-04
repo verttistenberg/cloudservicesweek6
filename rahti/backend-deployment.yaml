@@ -43,21 +43,28 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: WEATHER_API_URL
-              startupProbe:
-                httpGet:
-                  path: /health
-                  port: 8000
-                periodSeconds: 3
-                failureThreshold: 20
-              livenessProbe:
-                httpGet:
-                  path: /health
-                  port: 8000
-                periodSeconds: 10
-                timeoutSeconds: 2
-              readinessProbe:
-                httpGet:
-                  path: /healthz
-                  port: 8000
-                periodSeconds: 5
-                timeoutSeconds: 3
+            - name: WEATHER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: WEATHER_API_KEY
+            - name: FMI_API_URL
+              value: https://opendata.fmi.fi/wfs
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 3
+            failureThreshold: 20
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 10
+            timeoutSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            periodSeconds: 5
+            timeoutSeconds: 3
