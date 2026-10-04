@@ -170,7 +170,13 @@
             <p>Commit to GitHub triggers the workflow:</p>
             <img src="https://a3s.fi/swift/v1/cloudservicesweek6/push1.png">
             <img src="https://a3s.fi/swift/v1/cloudservicesweek6/push2.png">
-            <p>Probe config: The liveness probe checks the application's health every 10 seconds, while the readiness probe checks if the application is ready to serve traffic every 5 seconds. The liveness probe doesn’t check the database, so that a database outage doesn't cause a restart and the readiness probe checks the database and marks the pod as not ready if the database is unavailable. The startup probe checks the application's readiness on startup. Below is an example of the probes working:</p>
+            <p>Probe config: The liveness probe checks the application's health every 10 seconds, while the readiness probe checks if the application is ready to serve traffic every 5 seconds. The liveness probe doesn’t check the database, so that a database outage doesn't cause a restart and the readiness probe checks the database and marks the pod as not ready if the database is unavailable. The startup probe checks the application's readiness on startup. When failing the readiness check deliberately, the pods dropped out of endpoints but the restarts stayed the same. Below is an example of the probes working:</p>
+            <img src="https://a3s.fi/swift/v1/cloudservicesweek6/juu.png">
+            <p>Log sample:</p>
+            <img src="https://a3s.fi/swift/v1/cloudservicesweek6/logs.png">
+            <p>I generated traffic by loading the app in the browser and ran oc logs deployment/backend --tail=15. The first lines are gunicorn's startup messages: the server listens on port 8000 with three sync workers supervised by a master process. The following lines are my structured request logs, one JSON object per request, containing timestamp, method, path, status code and duration in milliseconds. They are written to stdout, so oc logs can retrieve them, and the JSON format lets a log system filter on status or aggregate duration_ms without parsing free text. Health-check requests are excluded so probe traffic doesn't flood the log.</p>
+            <p>Issues encountered:</p>
+            <p>I named the workflow file deploy.YML instead of deploy.yml which prevented the file from being recognized by GitHub Actions. Also, the probes were indented wrong in the backend yaml file, which prevented them from working completely until the error was fixed.</p>
 
         </details>
 
