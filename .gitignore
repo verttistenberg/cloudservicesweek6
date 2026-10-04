@@ -1,0 +1,37 @@
+# --- Python / Flask backend ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+ 
+# --- Environment / secrets ---
+.env
+.env.*
+*.pem
+*.key
+kubeconfig
+kubeconfig.yaml
+ 
+# CSC / OpenStack credentials (Allas, cPouta)
+*openrc*.sh
+*openrc*.txt
+clouds.yaml
+ 
+# Any local yaml you may have used to draft the Secret before switching to
+# `oc create secret --from-literal=...` — make sure nothing like this exists
+# in the repo before pushing:
+*secret*.yaml
+!rahti/*-configmap.yaml
+ 
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+ 
+# --- Misc ---
+*.log
+node_modules/
+"oc.exe" 

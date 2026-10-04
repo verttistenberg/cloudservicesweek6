@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Weeks 4 & 5</title>
+    <style>
+        details { 
+            margin: 12px 0; 
+            padding: 8px 12px; 
+            border: 1px solid #999; 
+            display: block; 
+            clear: both; 
+        }
+        summary { 
+            cursor: pointer; 
+            font-size: 1.4em; 
+            font-weight: bold; 
+        }
+        pre { 
+            background: #eee; 
+            padding: 8px; 
+            overflow-x: auto; 
+        }
+        code { 
+            background: #eee; 
+        }
+        img { 
+            max-width: 100%; 
+            height: auto; 
+            display: block; 
+            margin: 10px 0; 
+        }
+    </style>
+</head>
+<body>
+    <h1>frontend (Nginx)</h1>
+    <div id="msg">Loading...</div>
+    <div id="visits"></div>
+    <script>
+        fetch('/api/')
+        .then(r => r.json())
+        .then(d => {
+            document.getElementById('msg').textContent = d.message;
+            document.getElementById('visits').textContent = 'Visits: ' + d.visits;
+        })
+        .catch(e => document.getElementById('msg').textContent = 'API error' + e);
+    </script>
+
+    <div id="oulu">Loading Oulu weather...</div>
+    <script>
+        fetch('/api/oulu')
+        .then(r => r.json())
+        .then(d => {
+            document.getElementById('oulu').textContent =
+                'Oulu: ' + d.temperature + ' °C, wind ' + d.wind_speed + ' m/s';
+        })
+        .catch(e => document.getElementById('oulu').textContent = 'Oulu error ' + e);
+    </script>
+
+    <div id="weather">Loading Helsinki weather...</div>
+    <script>
+        fetch('/api/weather?lat=60.17&lon=24.94')
+        .then(r => r.json())
+        .then(d => {
+            document.getElementById('weather').textContent =
+                'Helsinki: ' + d.temperature + ' °C, wind ' + d.wind_speed + ' km/h';
+        })
+        .catch(e => document.getElementById('weather').textContent = 'Weather error ' + e);
+    </script>
+
+    <div>
+        <h1>Documentation</h1>
+
+        <details>
+            <summary>Week 4</summary>
+
+            <h2>Overview</h2>
+            <p>This is a three-tier web application. It features an Nginx-served static frontend, a Flask/Gunicorn REST backend, and a MySQL database which was converted from a Docker Compose deployment into a Kubernetes deployment on CSC Rahti. The server time comes from a live SELECT NOW() query, and the visit counter is incremented and persisted in MySQL on every page load. This proves the full chain works, as a browser request only ever reaches MySQL by passing through the frontend proxy and the backend API, so the database itself is never exposed directly to the internet.</p>
+            <h2>Database persistence</h2>
+            <p>The database is backed up with a PVC, so data is preserved across pod restarts. Here are a few screenshots to showcase this:</p>
+            <img src="https://a3s.fi/swift/v1/week4/visits1.png">
+            <img src="https://a3s.fi/swift/v1/week4/delete.png">
+            <img src="https://a3s.fi/swift/v1/week4/visits2.png">
+            <p>This is different from a Docker container, because without a PVC, MySQL's storage lives in the container's writable layer and is destroyed the moment the container is removed. </p>
+            <h2>Pod recovery experiment</h2>
+            <p>The backend pod was deleted:</p>
+            <img src="https://a3s.fi/swift/v1/week4/backend1.png">
+            <img src="https://a3s.fi/swift/v1/week4/backend2.png">
+            <p>A new pod appears because the <b>ReplicaSet</b> owned by the backend deployment continuously watches how many pods matching its label selector are running. When the count drops below the desired replicas value, it creates a new pod to bring the count back up. This is the mechanism that makes Kubernetes deployments self-healing. There is no equivalent automatic restart in a plain Docker Compose setup unless <b>restart: always</b> is explicitly configured, and even then Compose only restarts the same container on the same host rather than scheduling a fresh one cluster-wide. </p>
+            <h2>Scaling experiment</h2>
+            <p>The backend deployment was scaled up to 3 replicas:</p>
+            <img src="https://a3s.fi/swift/v1/week4/replicas.png">
+            <p>The frontend needed no changes to keep working with multiple backend replicas. It always talks to backend:8000 which is the Service's stable DNS name and ClusterIP, never to individual pod IP addresses. The Service automatically load-balances requests across every pod matching app: backend, so pods can be added or removed freely behind that one stable endpoint. After the three replicas were running, I used <b>oc scale deployment/backend --replicas=1</b> to return to the original configuration.</p>
+            <h2>Application update</h2>
+            <p>The backend was rebuilt under a new tag and rolled out to see how the update is handled. First, I used <b>docker build</b> to create a new image with the updated code. Then I pushed it to the container registry. Then, I used <b>oc apply -f backend-deployment.yaml</b> to deploy the updated code. Using <b>oc rollout status</b> we can see that the deployment was successful.</p>
+            <img src="https://a3s.fi/swift/v1/week4/deploy.png">
+            <p>With the default <b>RollingUpdate</b> strategy, the old pod kept serving traffic until the new pod passed its readiness state, and only then was the old pod terminated. This produced a zero-downtime update, so at no point did the service have zero available backend pods.</p>
+            <h2>Config and secrets</h2>
+            <p>Configuration is split between a ConfigMap (app-config) and a Secret (mysql-secret) rather than being hard-coded into the container images, so the same image can be reused across environments just by changing these objects. ConfigMap includes non-sensitive values like DB_HOST, DB_USER and DB_NAME, while the Secret contains sensitive information like the database password and root password. The secret was created imperatively through CLI so no plaintext password is ever written to a file in the repository.</p>
+            <h2>Minor annoyances with the assignment</h2>
+            <p>These are a few minor issues I encountered while working on the assignment:</p>
+            <ul>
+                <li><b>ImagePullBackOff</b> The backend image failed to pull with "requested access to the resource is denied." The image had never been pushed to Docker Hub under that exact name/tag. Fixed by rebuilding, logging in, and pushing under the exact name referenced in the deployment yaml, and confirming the repository was public.</li>
+                <li><b>nginx CrashLoopBackOff</b> Stock nginx:alpine tried to write to /var/cache/nginx and /run/nginx.pid, both root-owned. OpenShift's restricted-v2 SCC runs containers as an arbitrary non-root UID, so these writes failed with "Permission denied." Solved by switching to nginxinc/nginx-unprivileged, moving nginx to listen on port 8080, and explicitly setting pid /tmp/nginx.pid; in the custom nginx.conf.</li>
+                <li><b>/api path mismatch</b> The frontend called fetch('/api') (no trailing slash) while nginx's location block was location /api/, so the request never matched the proxy rule. Fixed by aligning both sides to use a trailing slash.</li>
+            </ul>
+            <h2>Differences between Docker Compose and Rahti</h2>
+            <p>The biggest shift moving from Docker Compose to Rahti is that containers stop being addressed directly and start being addressed through Kubernetes objects that abstract them away. Instead of one shared host network where containers reach each other by name, pods talk only through Services, which give a stable virtual IP and DNS name no matter which node a pod actually runs on. Recovery changes from something that has to be explicitly configured to something automatic, a ReplicaSet constantly checks the running pod count against the desired count and reschedules failed pods anywhere in the cluster. Scaling goes from manually running extra containers and juggling host port conflicts to simply changing a replica number, with the Service automatically load-balancing across however many pods exist. Persistent storage moves from a Docker volume tied to one host's disk to a PersistentVolumeClaim backed by cluster storage, so it survives a pod being rescheduled to a different node entirely. Exposing the app to the internet goes from a directly published host port to an explicit Route object, which also handles TLS termination and hostname routing through OpenShift's router. And configuration moves out of the compose file itself into separate ConfigMap and Secret objects, decoupling credentials and settings from both the image and the deployment definition. Altogether, Compose treats the app as a fixed set of containers on one machine, while Rahti treats it as a desired state that the cluster continuously works to maintain.</p>
+        </details>
+
+        <details>
+            <summary>Week 5</summary>
+
+            <h2>Part A: Questions</h2>
+            <p><b>SAML vs OAuth:</b> SAML (Security Assertion Markup Language) is an XML-based protocol designed primarily for authentication and enterprise Single Sign-On (SSO), passing user identity assertions. OAuth is a framework designed for authorization, delegating API permissions via access tokens. A company could choose SAML when implementing enterprise SSO for employees across corporate applications. OAuth is chosen when grant-based API access or modern user authorization is required (for example allowing a web app to access a user's Google Drive). </p>
+            <p><b>What is a WAF:</b> A WAF filters, monitors, and blocks HTTP/HTTPS traffic to and from a web application, protecting against application-layer attacks like SQL Injection (SQLi), Cross-Site Scripting (XSS), Cross-Site Request Forgery (CSRF), and credential stuffing. It should be placed before or at the entry point (Route/Ingress level) so incoming malicious web traffic is inspected and filtered before ever reaching your frontend or backend services.</p>
+            <p><b>Centralized storage vs decentralized storage:</b> Decentralized networks split, encrypt, and distribute files across a peer-to-peer network using content addressing hashes, eliminating single points of failure and vendor lock-in. Centralized storage relies on a single cloud provider managing server clusters. Centralized storage offers high performance, low latency, easy management, and explicit SLAs, but carries risks of censorship, outages, and provider lock-in. Decentralized storage provides high resilience and censorship resistance, but suffers from variable retrieval speeds, network availability dependencies, and operational complexity.</p>
+            <p><b>What is YAML and how does it compare to JSON:</b> YAML is a human-friendly data serialization format. It became the default for Kubernetes/Rahti manifests because it is significantly easier for humans to read and write, supports comments, and reduces visual noise. YAML is a strict superset of JSON. Unlike JSON, YAML supports inline comments, uses indentation instead of structural brackets {} and brackets [], and requires less repetitive syntax, making large cluster configurations much cleaner to maintain.</p>
+
+            <h2>Part B: Public API integration</h2>
+            <p>This week I added a new function to the app: the Flask backend now calls external public weather APIs and exposes the results through the <b>/api</b> path. There are two endpoints. <b>/api/weather</b> calls the Open-Meteo forecast API for any latitude and longitude (Helsinki is shown above), and <b>/api/oulu</b> reads live observations for the Oulunsalo weather station from the Finnish Meteorological Institute (FMI) open data service. Neither API needs a key. The browser never talks to the external APIs directly; it calls the same-origin <b>/api</b> path, nginx proxies it to the backend Service, and the backend makes the outbound request, extracts the fields it needs (temperature and wind speed) and returns small JSON responses.</p>
+
+            <h2>Architecture</h2>
+            <p>The Week 4 architecture now has one new element. An external box for the FMI and Open-Meteo APIs, reached by an outbound HTTPS arrow from the backend.</p>
+            <p>Request path: browser, then the route, then the nginx frontend, then the backend Service, then the Flask backend, then the external API. The MySQL database is not involved in the weather endpoints.</p>
+
+            <h2>Running components</h2>
+            <p>The integration lives inside the existing backend Deployment, which reads its configuration (the upstream API URLs) from the <b>app-config</b> ConfigMap, the same way the database settings are handled. No new Service was needed because the existing backend Service already exposes the new routes. The assignment instructions specifically mentioned that the new component should be an independent deployment, but the instructions for the Public API option says that the existing backend should call an external public API, which is why I don't have oc get pods or oc get svc outputs here for example. The screenshots below showcase that the service is not hard-coded and updates automatically every few minutes.</p>
+
+            <h2>Proof that the data is live and not hard-coded</h2>
+            <ul>
+                <li><b>Changes over time:</b> the station reports every 10 minutes, and the values on the page change between checks.</li>
+                <li><b>Breaks when the upstream breaks:</b> I pointed the API URL environment variable at an invalid address with <code>oc set env</code>, and the endpoint returned <b>502 Upstream service unavailable</b> instead of a stored value. I then restored the correct URL.</li>
+                <li><b>Depends on the request:</b> <code>/api/weather</code> returns different values for different coordinates and rejects invalid ones (for example latitude 999) with a 400 error.</li>
+            </ul>
+            <img src="https://a3s.fi/swift/v1/week5/time1.png">
+            <img src="https://a3s.fi/swift/v1/week5/time2.png">
+            <img src="https://a3s.fi/swift/v1/week5/test1.png">
+
+            <h2>Reflection</h2>
+            <p><b>Rate limiting and caching</b> Both APIs are free public services that can throttle or block heavy use. Every page load currently triggers a live upstream request, so many visitors would multiply the calls. The FMI station only updates every 10 minutes, so responses could be cached for about that long, and the app's own API routes should be rate limited per client, in Flask or at the ingress.</p>
+            <p><b>Secrets handling</b> These two APIs need no key, but many do. A key must be stored in a Secret and injected as an environment variable, never in a ConfigMap which is not encrypted, in the image, or in Git. Keys should be rotated and access to the Secret limited.</p>
+            <p><b>Reliability</b> The backend uses a 5 second timeout so a slow upstream cannot hang a worker, and it returns a clear 502 when the upstream fails. A production version should also retry with backoff, serve the last good cached reading when the API is down, and alert on failures. Missing values matter too: my first query silently matched a station with no wind sensor and returned null, so a missing field should be treated as a data-quality issue worth monitoring.</p>
+            <p><b>Third-party dependency and licensing</b> The app depends on services it does not control. FMI open data is licensed CC BY 4.0, so the source must be credited: weather data from the Finnish Meteorological Institute.</p>
+
+            <h2>Problems encountered</h2>
+            <ul>
+                <li><b>404 on the new route.</b> nginx's <code>proxy_pass http://backend:8000/;</code> has a trailing slash, which strips the matched <code>/api/</code> prefix. A request for <code>/api/weather</code> therefore reached Flask as <code>/weather</code>. Fixed by defining the Flask routes without the <code>/api</code> prefix.</li>
+                <li><b>Wind speed was null.</b> Querying <code>place=Oulu</code> matched a station that does not measure wind, so every wind value was NaN. I compared the raw FMI responses for several places and switched to Oulunsalo, which reports both temperature and wind.</li>
+            </ul>
+
+
+
+        </details>
+
+        <p>Weather data from FMI and Open-Meteo</p>
+        <p><b>i'm sorry for the awful visuals lol</b></p>
+    </div>
+</body>
+</html>
