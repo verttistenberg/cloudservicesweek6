@@ -153,6 +153,23 @@
 
         </details>
 
+        <details>
+            <summary>Week 6</summary>
+            
+            <h2>Part A: Questions</h2>
+            <p><b>CI vs Continuous Delivery vs Continuous Deployment:</b> Continuous Integration: every change is merged frequently and automatically built and tested, so integration problems show up within minutes. Continuous Delivery: CI plus every change that passes is automatically packaged and left in a releasable state. A human still presses the button to release to production. Continuous Deployment: no button. Every change that passes the pipeline goes to production automatically.</p>
+            <p><b>Describe the structure of a GitHub Actions workflow (triggers, jobs, steps). What would a minimal pipeline for the app you built in Week 4/5 need to do?</b> A workflow is a YAML file in .github/workflows/. It has three layers: Triggers (on:) say when it runs. Jobs are groups of steps that run on one runner (runs-on: ubuntu-latest). Jobs run in parallel unless you add needs:. Steps run in order inside a job. Each one is either a reusable action (uses:) or a shell command (run:). For this app, the pipeline is: the minimal pipeline is: check out the code, log in to Docker Hub, build and push the backend image tagged with the commit SHA, install oc and log in to Rahti with the service-account token, run oc set image, then run oc rollout status so the job fails if the new pod never becomes Ready.</p>
+            <p><b>Explain the difference between a liveness probe and a readiness probe in Kubernetes/Rahti. What happens when each one fails? </b> Liveness probe: Kubernetes/Rahti checks periodically whether the process is healthy. If the probe fails more times in a row than failureThreshold allows, the kubelet kills the container and restarts it. This is for situations a process can't recover from by itself, such as a deadlock or a hung server. Readiness probe: If it fails, the container is not restarted. Instead the pod is marked 0/1 Ready and removed from the Service's endpoints, so the Service stops routing requests to it. When the probe passes again, the pod is added back automatically. This suits temporary conditions such as a lost database connection, a warming-up app, or overload.</p>
+            <p><b>Why should secrets (registry tokens, cluster login tokens) never be hard-coded into a CI/CD pipeline file? How does GitHub Actions handle this instead?</b> A workflow file is committed to Git, so anything written in it is stored in the repository history permanently. That causes several problems: 1. Anyone with read access to the repo can read the token. 2. Automated scrapers scan public GitHub repos for leaked credentials within minutes. 3. A leaked Docker Hub token lets someone push malicious images under your name, and a leaked cluster token lets them act on a Rahti project for example with the service account's permissions. If you store secrets in Github secrets, the workflow file contains only the name and never the value, so the file is safe to commit. Also, GitHub automatically masks secret values in logs, replacing them with ***.</p>
+
+            <h2>Part B — Hands-On: Automate & Observe Your App</h2>
+            <p>This week I automated the deployment process for my application using GitHub Actions, so that every code change is automatically built, tested, and deployed to the staging environment. Below is the documentation for this weeks assignment.</p>
+            <p>Link to the workflow yml on GitHub: <a href="https://github.com/verttistenberg/cloudservicesweek6/blob/main/.github/workflows/deploy.yml">deploy.yml</a></p>
+            <p>Workflow run on GitHub Actions:</p>
+            <img src="https://a3s.fi/swift/v1/cloudservicesweek6/deploy1.png">
+
+        </details>
+
         <p>Weather data from FMI and Open-Meteo</p>
         <p><b>i'm sorry for the awful visuals lol</b></p>
     </div>

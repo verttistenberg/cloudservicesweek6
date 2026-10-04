@@ -50,7 +50,6 @@ def init_db():
 init_db()
 
 
-# --- structured request logging (one JSON line per request, to stdout) ---
 req_logger = logging.getLogger('requests')
 req_logger.setLevel(logging.INFO)
 req_logger.propagate = False
@@ -58,7 +57,7 @@ _handler = logging.StreamHandler(sys.stdout)
 _handler.setFormatter(logging.Formatter('%(message)s'))
 req_logger.addHandler(_handler)
 
-QUIET_PATHS = {'/health', '/healthz'}  # skip probe traffic so logs stay readable
+QUIET_PATHS = {'/health', '/healthz'}
 
 
 @app.before_request
@@ -81,13 +80,11 @@ def log_request(response):
 
 @app.get('/health')
 def health():
-    # liveness: the process is up and answering. Deliberately no DB check.
     return jsonify({'status': 'ok'})
 
 
 @app.get('/healthz')
 def healthz():
-    # readiness: can this pod actually serve requests? Checks the database.
     try:
         conn = get_connection(timeout=2)
         cur = conn.cursor()
@@ -147,7 +144,7 @@ def weather():
         r.raise_for_status()
     except requests.RequestException as e:
         app.logger.error('Upstream API failed: %s', e)
-        return jsonify({'error': 'Upstream service unavailable'}), 502
+        return jsonify({'error': 'Upstream service unavailable.'}), 502
 
     current = r.json()['current']
     return jsonify({
@@ -179,17 +176,17 @@ def oulu_weather():
         root = ET.fromstring(r.content)
     except (requests.RequestException, ET.ParseError) as e:
         app.logger.error('FMI request failed: %s', e)
-        return jsonify({'error': 'Upstream service unavailable'}), 502
+        return jsonify({'error': 'Upstream service unavailable.'}), 502
 
     latest = {}
     for el in root.findall('.//BsWfs:BsWfsElement', NS):
         name = el.find('BsWfs:ParameterName', NS).text
         value = el.find('BsWfs:ParameterValue', NS).text
         if value and value != 'NaN':
-            latest[name] = float(value)  # later entries overwrite earlier ones
+            latest[name] = float(value)
 
     if not latest:
-        return jsonify({'error': 'No recent observations'}), 502
+        return jsonify({'error': 'No recent observations.'}), 502
 
     return jsonify({
         'station': 'Oulunsalo',
